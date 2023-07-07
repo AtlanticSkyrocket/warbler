@@ -4,7 +4,7 @@ from flask import Flask, render_template, request, flash, redirect, session, g
 from flask_debugtoolbar import DebugToolbarExtension
 from sqlalchemy.exc import IntegrityError
 
-from forms import UserAddForm, LoginForm, MessageForm
+from forms import UserAddForm, UserEditForm, LoginForm, MessageForm
 from models import db, connect_db, User, Message
 
 CURR_USER_KEY = "curr_user"
@@ -64,7 +64,7 @@ def signup():
     If the there already is a user with that username: flash message
     and re-present form.
     """
-    import pdb; pdb.set_trace()
+   
     form = UserAddForm()
 
     if form.validate_on_submit():
@@ -114,7 +114,10 @@ def logout():
     """Handle logout of user."""
 
     # IMPLEMENT THIS
-
+    do_logout()
+    flash("You have been logged out", "success")
+    return redirect("/login")
+    
 
 ##############################################################################
 # General user routes:
@@ -210,9 +213,26 @@ def stop_following(follow_id):
 @app.route('/users/profile', methods=["GET", "POST"])
 def profile():
     """Update profile for current user."""
-
-    # IMPLEMENT THIS
-
+    form = UserEditForm(obj=g.user)
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+    
+    if form.validate_on_submit():
+        user = User.authenticate(g.user.username, form.password.data)
+        if user:
+            user.username = form.username.data
+            user.email = form.email.data
+            user.image_url = form.image_url.data
+            user.header_image_url = form.header_image_url.data
+            user.bio = form.bio.data
+            db.session.commit()
+            return redirect(f"/users/{user.id}")
+        else:
+            flash("Invalid password", "danger")
+            return redirect("/")
+        
+    return render_template('/users/edit.html', user_id=g.user.id, form=form)
 
 @app.route('/users/delete', methods=["POST"])
 def delete_user():
