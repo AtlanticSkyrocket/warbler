@@ -234,6 +234,41 @@ def profile():
         
     return render_template('/users/edit.html', user_id=g.user.id, form=form)
 
+@app.route('/users/add_like/<int:msg_id>', methods=["POST"])
+def add_like(msg_id):
+    """Add a like to a message"""
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+    
+    liked_msg = Message.query.get_or_404(msg_id)
+    g.user.likes.append(liked_msg)
+    db.session.commit()
+    return redirect("/")
+
+@app.route('/users/remove_like/<int:msg_id>', methods=["POST"])
+def remove_like(msg_id):
+    """Remove a like to a message"""
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+    
+    liked_msg = Message.query.get_or_404(msg_id)
+    g.user.likes.remove(liked_msg)
+    db.session.commit()
+    return redirect("/")
+
+@app.route('/users/<int:user_id>/likes')
+def users_likes(user_id):
+    """Show list of likes of this user."""
+
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+
+    user = User.query.get_or_404(user_id)
+    return render_template('users/likes.html', user=user)
+
 @app.route('/users/delete', methods=["POST"])
 def delete_user():
     """Delete user."""
@@ -312,17 +347,11 @@ def homepage():
     """
 
     if g.user:
-        messages = (Message
-                    .query
-                    .order_by(Message.timestamp.desc())
-                    .limit(100)
-                    .all())
-
+        messages = (Message.get_top_messages_for_user(g.user))
         return render_template('home.html', messages=messages)
 
     else:
         return render_template('home-anon.html')
-
 
 ##############################################################################
 # Turn off all caching in Flask

@@ -51,15 +51,18 @@
               <span class="text-muted">{{ msg.timestamp.strftime('%d %B %Y') }}</span>
               <p>{{ msg.text }}</p>
             </div>
-            <form method="POST" action="/users/add_like/{{ msg.id }}" id="messages-form">
-              <button class="
-                btn 
-                btn-sm 
-                {{'btn-primary' if msg.id in likes else 'btn-secondary'}}"
-              >
-                <i class="fa fa-thumbs-up"></i> 
-              </button>
-            </form>
+            {% set liked_warble = msg in g.user.likes %}
+            {% if g.user.id != msg.user.id %}
+              <form method="POST" action="/users/{% if liked_warble %}remove_like{% else %}add_like{% endif %}/{{ msg.id }}" id="messages-form">
+                <button class="
+                  btn 
+                  btn-sm 
+                  {{'btn-primary' if msg.id in g.user.likes else 'btn-secondary'}}"
+                >
+                  <i class="{% if liked_warble %}fas fa-star{% else %}far fa-star{% endif %}"></i> 
+                </button>
+              </form>
+            {% endif %}
           </li>
         {% endfor %}
       </ul>

@@ -199,6 +199,10 @@ class Message(db.Model):
 
     user = db.relationship('User')
 
+    @classmethod
+    def get_top_messages_for_user(cls, user, limit=100):
+        ids = [u.id for u in user.following] + [user.id]
+        return cls.query.filter(cls.user_id.in_(ids)).order_by(cls.timestamp.desc()).limit(limit).all()
 
 def connect_db(app):
     """Connect this database to provided Flask app.
