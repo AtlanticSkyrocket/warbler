@@ -26,7 +26,9 @@ from app import app, CURR_USER_KEY
 # once for all tests --- in each test, we'll delete the data
 # and create fresh new clean test data
 
-db.create_all()
+with app.app_context():
+    db.drop_all()
+    db.create_all()
 
 # Don't have WTForms use CSRF at all, since it's a pain to test
 
@@ -38,7 +40,10 @@ class MessageViewTestCase(TestCase):
 
     def setUp(self):
         """Create test client, add sample data."""
-
+        
+        self.app_context = app.app_context()
+        self.app_context.push()
+        
         User.query.delete()
         Message.query.delete()
 
@@ -50,7 +55,12 @@ class MessageViewTestCase(TestCase):
                                     image_url=None)
 
         db.session.commit()
-
+        
+    def tearDown(self):
+        """Clean up fouled transactions."""
+        db.session.rollback()
+        self.app_context.pop()
+        
     def test_add_message(self):
         """Can use add a message?"""
 
@@ -71,3 +81,91 @@ class MessageViewTestCase(TestCase):
 
             msg = Message.query.one()
             self.assertEqual(msg.text, "Hello")
+
+    def test_messages_show(self):
+        """Test showing a message."""
+
+        message = Message(text="Test Message", user_id=self.testuser.id)
+        db.session.add(message)
+        db.session.commit()
+
+        with self.client as client:
+            response = client.get(f"/messages/{message.id}")
+            html = response.get_data(as_text=True)
+
+            # Check response
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("Test Message", html)
+            self.assertIn(f'href="/users/{self.testuser.id}"', html)
+
+    def test_messages_destroy(self):
+        """Test deleting a message."""
+
+        message = Message(text="Test Message", user_id=self.testuser.id)
+        db.session.add(message)
+        db.session.commit()
+
+        with self.client as client:
+            with client.session_transaction() as sess:
+                sess[CURR_USER_KEY] = self.testuser.id
+
+            response = client.post(f"/messages/{message.id}/delete", follow_redirects=True)
+            html = response.get_data(as_text=True)
+
+            # Check response
+            self.assertEqual(response.status_code, 200)
+            self.assertNotIn("Test Message", html)
+            self.assertIn(f'href="/users/{self.testuser.id}"', html)
+
+    def test_messages_add_requires_login(self):
+        """Test that adding a message requires a logged-in user."""
+
+        with self.client as client:
+            response = client.post("/messages/new", data={"text": "Test Message"}, follow_redirects=True)
+            html = response.get_data(as_text=True)
+
+            # Check response
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("You must be logged in to add a new message", html)
+            self.assertNotIn("Test Message", html)
+
+    def test_messages_destroy_requires_login(self):
+        """Test that deleting a message requires a logged-in user."""
+
+        message = Message(text="Test Message", user_id=self.testuser.id)
+        db.session.add(message)
+        db.session.commit()
+
+        with self.client as client:
+            response = client.post(f"/messages/{message.id}/delete", follow_redirects=True)
+            html = response.get_data(as_text=True)
+
+            # Check response
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("You must be logged in to delete messages", html)
+            self.assertIn(f'<h2 class="join-message">Welcome back.</h2>', html)
+
+    def test_messages_destroy_requires_authorization(self):
+        """Test that deleting a message requires authorization."""
+
+        message = Message(text="Test Message", user_id=self.testuser.id)
+        db.session.add(message)
+        db.session.commit()
+
+        unauthorized_user = User.signup(username="unauthorizeduser",
+                                        email="unauthorized@test.com",
+                                        password="testpassword",
+                                        image_url=None)
+        db.session.commit()
+
+        with self.client as client:
+            with client.session_transaction() as sess:
+                sess[CURR_USER_KEY] = unauthorized_user.id
+
+            response = client.post(f"/messages/{message.id}/delete", follow_redirects=True)
+            html = response.get_data(as_text=True)
+
+            # Check response
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("Access unauthorized.", html)
+            self.assertIn(f"href=\"/users/{unauthorized_user.id}\"", html)

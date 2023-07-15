@@ -34,7 +34,7 @@ def add_user_to_g():
     """If we're logged in, add curr user to Flask global."""
 
     if CURR_USER_KEY in session:
-        g.user = User.query.get(session[CURR_USER_KEY])
+        g.user = db.session.get(User, session[CURR_USER_KEY])
 
     else:
         g.user = None
@@ -161,8 +161,8 @@ def show_following(user_id):
     """Show list of people this user is following."""
 
     if not g.user:
-        flash("Access unauthorized.", "danger")
-        return redirect("/")
+        flash("You must be logged in to view the page.", "danger")
+        return redirect("/login")
 
     user = User.query.get_or_404(user_id)
     return render_template('users/following.html', user=user)
@@ -173,8 +173,8 @@ def users_followers(user_id):
     """Show list of followers of this user."""
 
     if not g.user:
-        flash("Access unauthorized.", "danger")
-        return redirect("/")
+        flash("You must be logged in to view the page.", "danger")
+        return redirect("/login")
 
     user = User.query.get_or_404(user_id)
     return render_template('users/followers.html', user=user)
@@ -296,8 +296,8 @@ def messages_add():
     """
 
     if not g.user:
-        flash("Access unauthorized.", "danger")
-        return redirect("/")
+        flash("You must be logged in to add a new message", "danger")
+        return redirect("/login")
 
     form = MessageForm()
 
@@ -322,12 +322,15 @@ def messages_show(message_id):
 @app.route('/messages/<int:message_id>/delete', methods=["POST"])
 def messages_destroy(message_id):
     """Delete a message."""
-
+    message = db.session.query(Message).get_or_404(message_id)
     if not g.user:
+        flash("You must be logged in to delete messages", "danger")
+        return redirect("/login")
+    if message.user.id != g.user.id:
         flash("Access unauthorized.", "danger")
         return redirect("/")
 
-    msg = Message.query.get(message_id)
+    msg = db.session.get(Message, message_id)
     db.session.delete(msg)
     db.session.commit()
 
